@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, asdict
 import pyblish.api
 from ayon_core.lib import (
     is_in_tests,
+    NumberDef
 )
 from ayon_core.pipeline import (
     AYONPyblishPluginMixin
@@ -37,9 +38,42 @@ class HoudiniCacheSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline
     label = "Submit Scene to Deadline"
     order = pyblish.api.IntegratorOrder
     hosts = ["houdini"]
-    families = ["publish.hou"]
+    families = [
+        "publish.hou",
+        "pointcache",
+        "abc",
+        "ass",
+        "redshiftproxy",
+        "vdbcache",
+        "model",
+        "staticMesh",
+        "rop.opengl",
+        "usdrop",
+        "camera"
+    ]
     targets = ["local"]
     settings_category = "deadline"
+
+    # Default chunk size for frames per task
+    default_chunk_size = 99999
+
+    @classmethod
+    def get_attribute_defs(cls):
+        """Return attribute definitions for publish dialog UI.
+
+        Returns:
+            list: List of attribute definitions for the publish dialog.
+        """
+        return [
+            NumberDef(
+                "chunk_size",
+                label="Frames Per Task",
+                default=cls.default_chunk_size,
+                decimals=0,
+                minimum=1,
+                maximum=99999
+            ),
+        ]
 
     def get_job_info(self, job_info=None):
         instance = self._instance
@@ -77,6 +111,16 @@ class HoudiniCacheSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline
         #  machines cannot render to the same file.
         if isinstance(instance.data.get("frames"), str):
             job_info.ChunkSize = 99999999
+        else:
+            # Use chunk_size from attribute values if available,
+            # otherwise use the value from job_info (which comes from
+            # CollectJobInfo plugin) or fall back to default
+            attribute_values = self.get_attr_values_from_data(instance.data)
+            chunk_size = attribute_values.get(
+                "chunk_size",
+                job_info.ChunkSize or self.default_chunk_size
+            )
+            job_info.ChunkSize = chunk_size
 
         return job_info
 
@@ -104,6 +148,19 @@ class HoudiniCacheSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline
         return plugin_payload
 
     def process(self, instance):
+        """Process plugin.
+        
+        Submit Houdini cache job to Deadline for farm rendering.
+        Skips submission if farm rendering is disabled.
+        
+        Args:
+            instance (pyblish.api.Instance): Instance data.
+        """
+        # Check if farm rendering is actually requested
+        if not instance.data.get("farm"):
+            self.log.debug("Farm rendering is disabled. Skipping Deadline submission.")
+            return
+
         super(HoudiniCacheSubmitDeadline, self).process(instance)
         output_dir = os.path.dirname(instance.data["files"][0])
         instance.data["outputDir"] = output_dir

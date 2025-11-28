@@ -112,6 +112,23 @@ class ProcessSubmittedCacheJobOnFarm(pyblish.api.InstancePlugin,
 
         environment = get_instance_job_envs(instance)
         environment.update(JobType.PUBLISH.get_job_env())
+        if environment:
+            env_keys = ", ".join(sorted(environment.keys()))
+            self.log.debug(
+                "Job env keys for Deadline publish job '%s': %s",
+                job_name,
+                env_keys
+            )
+        else:
+            self.log.warning(
+                "No farm job environment variables collected for '%s'.",
+                instance.name
+            )
+        if "PYTHONPATH" not in environment:
+            self.log.warning(
+                "Farm publish job '%s' is missing PYTHONPATH; USD pinning may fail.",
+                job_name
+            )
 
         priority = self.deadline_priority or instance.data.get("priority", 50)
 
@@ -290,7 +307,8 @@ class ProcessSubmittedCacheJobOnFarm(pyblish.api.InstancePlugin,
             for inst in instances:
                 if "deadline" not in inst:
                     inst["deadline"] = {}
-                inst["deadline"] = instance.data["deadline"]
+                # FIX: Use deepcopy to avoid modifying the original dict and crashing on subsequent loops
+                inst["deadline"] = deepcopy(instance.data["deadline"])
                 inst["deadline"].pop("job_info")
 
         # publish job file
@@ -301,12 +319,18 @@ class ProcessSubmittedCacheJobOnFarm(pyblish.api.InstancePlugin,
             "fps": instance_skeleton_data["fps"],
             "source": instance_skeleton_data["source"],
             "user": instance.context.data["user"],
-            "version": instance.context.data["version"],  # workfile version
             "intent": instance.context.data.get("intent"),
             "comment": instance.context.data.get("comment"),
             "job": render_job or None,
             "instances": instances
         }
+
+        # Prefer explicit version overrides, but gracefully handle missing data.
+        collected_version = instance.data.get("version")
+        if collected_version is None:
+            collected_version = instance.context.data.get("version")
+        if collected_version is not None:
+            publish_job["version"] = collected_version
 
         if deadline_publish_job_id:
             publish_job["deadline_publish_job_id"] = deadline_publish_job_id
@@ -314,6 +338,9 @@ class ProcessSubmittedCacheJobOnFarm(pyblish.api.InstancePlugin,
         metadata_path, rootless_metadata_path = \
             create_metadata_path(instance, anatomy)
 
+        metadata_dir = os.path.dirname(metadata_path)
+        os.makedirs(metadata_dir, exist_ok=True)
+        self.log.debug(f"Writing metadata json to '{metadata_path}'")
         with open(metadata_path, "w") as f:
             json.dump(publish_job, f, indent=4, sort_keys=True)
 
