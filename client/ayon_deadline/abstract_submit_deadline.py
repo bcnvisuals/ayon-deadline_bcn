@@ -145,6 +145,12 @@ class AbstractSubmitDeadline(
             render_job_id = self.submit(payload, auth, verify)
 
             instance.data["deadline"]["job_info"] = deepcopy(render_job_info)
+
+# [NEW]     #Force update for Split Renders
+            # Since submit() now ignores the second job by default, we must 
+            # manually overwrite it here because for Split Renders, the 2nd job IS the Render.
+            instance.data["deadlineRenderJob"] = instance.data["deadlineSubmissionJob"]
+            
             self.log.info("Render job id: %s", render_job_id)
 
     def _set_scene_path(
@@ -209,15 +215,16 @@ class AbstractSubmitDeadline(
         return self.submit(payload, auth, verify)
 
     def get_generic_job_info(self, instance: pyblish.api.Instance):
+        """Get generic job info with Farm Job Chain dependencies."""
+
         context: pyblish.api.Context = instance.context
         job_info: PublishDeadlineJobInfo = (
             instance.data["deadline"]["job_info"]
         )
 
-        # Always use the original work file name for the Job name even when
-        # rendering is done from the published Work File. The original work
-        # file name is clearer because it can also have subversion strings,
-        # etc. which are stripped for the published file.
+        # ---------------------------------------------------------
+        # Standard AYON Batch Name Logic (Groups jobs by workfile)
+        # ---------------------------------------------------------
         batch_name = os.path.basename(context.data["currentFile"])
 
         if is_in_tests():
@@ -225,7 +232,6 @@ class AbstractSubmitDeadline(
 
         job_info.Name = "%s - %s" % (batch_name, instance.name)
         job_info.BatchName = batch_name
-        # TODO clean deadlineUser
         job_info.UserName = context.data.get("deadlineUser", getpass.getuser())
         job_info.Comment = context.data.get("comment")
 
@@ -237,16 +243,67 @@ class AbstractSubmitDeadline(
         if job_info.Frames:
             instance.data["hasExplicitFrames"] = True
 
+<<<<<<< HEAD
         if job_info.reuse_last_version:
             instance.data["reuseLastVersion"] = True
 
         # Adding file dependencies.
+=======
+        # if job_info.reuse_last_version:
+        #     instance.data["reuseLastVersion"] = True
+
+        # ---------------------------------------------------------
+        # Standard Asset Dependencies (File inputs)
+        # ---------------------------------------------------------
+>>>>>>> 9a3f392 (Enhance job submission logic in AbstractSubmitDeadline to support split renders and farm job chain dependencies. Added force update for split renders and improved handling of job dependencies with detailed logging for better debugging.)
         if not is_in_tests() and job_info.use_asset_dependencies:
             dependencies = instance.context.data.get("fileDependencies", [])
             for dependency in dependencies:
                 job_info.AssetDependency += dependency
 
-        # Set job environment variables
+        # [NEW] Farm Job Chain Logic
+        # Using 'self.log' ensures these messages appear in the Publisher UI
+        chain_deps = instance.data.get("farm_instance_dependencies", [])
+        
+        if chain_deps:
+            self.log.info(f"--- CHAIN DEBUG: Processing '{instance.data.get('name')}' ---")
+
+        for dep_instance in chain_deps:
+            dep_name = dep_instance.data.get("name")
+            self.log.info(f"Inspecting Dependency: '{dep_name}'")
+            
+            # Check keys
+            has_render_key = "deadlineRenderJob" in dep_instance.data
+            has_submit_key = "deadlineSubmissionJob" in dep_instance.data
+            
+            # 1. PRIORITY: EXR Job
+            dep_job_id = None
+            if has_render_key:
+                dep_job_id = dep_instance.data["deadlineRenderJob"].get("_id")
+                self.log.info(f"  -> PRIORITY HIT: Using Render Job ID: {dep_job_id}")
+            
+            # 2. FALLBACK: Review/Publish Job
+            elif has_submit_key:
+                dep_job_id = dep_instance.data["deadlineSubmissionJob"].get("_id")
+                name = dep_instance.data["deadlineSubmissionJob"].get("Name", "Unknown")
+                self.log.warning(f"  -> FALLBACK HIT: Using Generic Job ID: {dep_job_id} (Name: {name})")
+            else:
+                self.log.error("  -> FAIL: No Job IDs found. Check submission order.")
+
+            # Apply ID
+            if dep_job_id:
+                if dep_job_id not in job_info.JobDependencies:
+                    job_info.JobDependencies.append(dep_job_id)
+                    self.log.info(f"  -> LINKED: {dep_job_id}")
+                else:
+                    self.log.info("  -> SKIPPED: ID already in dependencies.")
+            
+        if chain_deps:
+            self.log.info("--- CHAIN DEBUG END ---")
+
+        # ---------------------------------------------------------
+        # Job Environment Variables
+        # ---------------------------------------------------------
         job_info.add_instance_job_env_vars(instance)
         job_info.add_render_job_env_var()
 
@@ -390,5 +447,11 @@ class AbstractSubmitDeadline(
 
         # for submit publish job
         self._instance.data["deadlineSubmissionJob"] = result
+
+       # [MODIFIED] Persist the Render Job intelligently
+        # If 'deadlineRenderJob' is NOT set yet, set it now.
+        # This ensures that for Nuke (Render -> Bake), we capture the first job (Render).
+        if "deadlineRenderJob" not in self._instance.data:
+            self._instance.data["deadlineRenderJob"] = result
 
         return result["_id"]
