@@ -1,5 +1,10 @@
 # Context for Agents
 
+## Branch Migration Notes (Dec 3, 2025)
+- Branch `0.5.19_bcn` created from tag `0.5.19` and all `0.5.15_bcn` commits authored by George Antonopoulos were cherry-picked.
+- `package.py` and `client/ayon_deadline/version.py` now report `0.5.19-bcn.1`; upstream requires `core > 1.6.4`.
+- `client/ayon_deadline/abstract_submit_deadline.py` contains the split-render fixes, dependency logging, and farm chain logic from commit `9a3f392`.
+
 ## Critical Bug Fixes: Houdini Cache Submission to Deadline
 
 ### Current Issue: Farm Publish Metadata Missing (KeyError ➜ FileNotFoundError)
