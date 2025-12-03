@@ -243,19 +243,10 @@ class AbstractSubmitDeadline(
         if job_info.Frames:
             instance.data["hasExplicitFrames"] = True
 
-<<<<<<< HEAD
         if job_info.reuse_last_version:
             instance.data["reuseLastVersion"] = True
 
         # Adding file dependencies.
-=======
-        # if job_info.reuse_last_version:
-        #     instance.data["reuseLastVersion"] = True
-
-        # ---------------------------------------------------------
-        # Standard Asset Dependencies (File inputs)
-        # ---------------------------------------------------------
->>>>>>> 9a3f392 (Enhance job submission logic in AbstractSubmitDeadline to support split renders and farm job chain dependencies. Added force update for split renders and improved handling of job dependencies with detailed logging for better debugging.)
         if not is_in_tests() and job_info.use_asset_dependencies:
             dependencies = instance.context.data.get("fileDependencies", [])
             for dependency in dependencies:
