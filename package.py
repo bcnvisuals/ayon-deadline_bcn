@@ -1,10 +1,6 @@
 name = "deadline"
 title = "Deadline"
-<<<<<<< HEAD
 version = "0.5.19-bcn.1"
-=======
-version = "0.5.15-bcn.9"
->>>>>>> 2a15d45 (Update version to 0.5.15-bcn.9 in package.py and version.py)
 
 client_dir = "ayon_deadline"
 
