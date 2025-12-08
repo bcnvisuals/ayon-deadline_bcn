@@ -77,4 +77,17 @@ class ExtractLastVersionFiles(pyblish.api.InstancePlugin):
             # reset representation/instance to original length
             repre["frameStart"] = used_version_entity["attrib"]["frameStart"]
             repre["frameEnd"] = used_version_entity["attrib"]["frameEnd"]
-            instance.data.pop("hasExplicitFrames")
+
+            # Update instance-level frame data for downstream plugins (review extraction)
+            # This ensures the full frame range is used when creating thumbnails/reviews
+            instance.data["frameStart"] = used_version_entity["attrib"]["frameStart"]
+            instance.data["frameEnd"] = used_version_entity["attrib"]["frameEnd"]
+            self.log.info(
+                f"Updated instance frame range to full version: "
+                f"{instance.data['frameStart']}-{instance.data['frameEnd']}"
+            )
+
+            # Pop hasExplicitFrames safely (only once, not per-representation)
+            if instance.data.get("hasExplicitFrames"):
+                instance.data.pop("hasExplicitFrames")
+
