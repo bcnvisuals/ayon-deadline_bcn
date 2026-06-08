@@ -57,16 +57,24 @@ class CollectJobInfoItem(BaseSettingsModel):
     _layout = "expanded"
     host_names: list[str] = SettingsField(
         default_factory=list,
-        title="Host names"
+        title="Host names",
     )
     task_types: list[str] = SettingsField(
         default_factory=list,
         title="Task types",
-        enum_resolver=task_types_enum
+        enum_resolver=task_types_enum,
     )
     task_names: list[str] = SettingsField(
         default_factory=list,
-        title="Task names"
+        title="Task names",
+    )
+    product_base_types: list[str] = SettingsField(
+        default_factory=list,
+        title="Product base types",
+        description=(
+            "Apply this profile only for products "
+            "with these productBaseTypes."
+        ),
     )
 
     #########################################
@@ -255,6 +263,14 @@ class NukeSubmitDeadlineModel(BaseSettingsModel):
     """Nuke-specific settings"""
 
     use_gpu: bool = SettingsField(True, title="Use GPU")
+    continue_on_error: bool = SettingsField(
+        False,
+        title="Continue On Error",
+        description=(
+            "Whether to enable continue on error on Deadline's Nuke plug-in"
+            " submission info by default in publish instance attributes."
+        )
+    )
     node_class_limit_groups: list[LimitGroupsSubmodel] = SettingsField(
         default_factory=list,
         title="Node based Limit Groups",
@@ -460,6 +476,7 @@ DEFAULT_DEADLINE_PLUGINS_SETTINGS = {
           ],
           "task_names": [],
           "task_types": [],
+          "product_base_types": [],
           "limit_groups": [],
           "machine_list": [],
           "primary_pool": "",
@@ -507,7 +524,8 @@ DEFAULT_DEADLINE_PLUGINS_SETTINGS = {
         "scene_patches": []
     },
     "NukeSubmitDeadline": {
-        "use_gpu": True
+        "use_gpu": True,
+        "continue_on_error": False,
     },
     "ProcessSubmittedCacheJobOnFarm": {
         "deadline_priority": 50,
