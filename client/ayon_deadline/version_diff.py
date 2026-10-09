@@ -529,7 +529,9 @@ def finalize(spec_path):
         "productName": spec["diff_product_name"],
         "productType": "render",
         "productBaseType": "render",
-        "families": ["render"],
+        # 'ftrack' explicitly: ftrack profiles usually require 'review',
+        #   which would also trigger ExtractReview/burnins on our jpgs
+        "families": ["render", "ftrack"],
         "folderPath": spec["folder_path"],
         "task": spec["task_name"],
         "frameStart": frame_start,
