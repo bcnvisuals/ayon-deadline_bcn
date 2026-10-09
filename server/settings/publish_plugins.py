@@ -375,6 +375,84 @@ class ProcessSubmittedJobOnFarmModel(BaseSettingsModel):
         return value
 
 
+class VersionDiffProfileModel(BaseSettingsModel):
+    _layout = "expanded"
+    host_names: list[str] = SettingsField(
+        default_factory=list,
+        title="Host names"
+    )
+    product_base_types: list[str] = SettingsField(
+        default_factory=list,
+        title="Product base types"
+    )
+    task_types: list[str] = SettingsField(
+        default_factory=list,
+        title="Task types",
+        enum_resolver=task_types_enum
+    )
+    families: list[str] = SettingsField(
+        default_factory=list,
+        title="Families (any)",
+        description=(
+            "Instance must have at least one of these families, e.g."
+            " 'redshift_rop' for Houdini Redshift renders. Empty = any."
+        )
+    )
+
+
+class SubmitVersionDiffModel(BaseSettingsModel):
+    """Render '<product>_diff' highlighting changes from previous version.
+
+    Runs after the regular publish (never delays it). The previous version
+    must be of the same product and task with the same resolution and frame
+    range, otherwise a note is added to the ftrack version instead.
+    Only beauty/main passes are compared.
+    """
+
+    enabled: bool = SettingsField(False, title="Enabled")
+    profiles: list[VersionDiffProfileModel] = SettingsField(
+        default_factory=list,
+        title="Profiles"
+    )
+    diff_suffix: str = SettingsField("_diff", title="Diff product suffix")
+    threshold: int = SettingsField(
+        6,
+        ge=1,
+        le=255,
+        title="Pixel threshold (0-255)",
+        description=(
+            "A pixel counts as changed when its display-space difference"
+            " (after prefilter) is above this value out of 255."
+        )
+    )
+    blur_size: int = SettingsField(
+        9,
+        ge=1,
+        le=31,
+        title="Noise prefilter size (px)",
+        description=(
+            "Gaussian blur applied (after a 3x3 median) to both frames"
+            " before comparing, so render noise is not reported as change."
+        )
+    )
+    min_changed_percent: float = SettingsField(
+        0.05,
+        ge=0.0,
+        le=100.0,
+        title="Frame changed above (% of pixels)"
+    )
+    max_output_width: int = SettingsField(
+        3840,
+        ge=0,
+        title="Max diff image width (0 = source)"
+    )
+    chunk_size: int = SettingsField(10, ge=1, title="Frames per Task")
+    priority: int = SettingsField(40, title="Priority")
+    group: str = SettingsField("", title="Group")
+    pool: str = SettingsField("", title="Pool")
+    department: str = SettingsField("", title="Department")
+
+
 class PublishPluginsModel(BaseSettingsModel):
     # Generic submission settings applying to all hosts
     CollectJobInfo: CollectJobInfoModel = SettingsField(
@@ -389,6 +467,9 @@ class PublishPluginsModel(BaseSettingsModel):
     ProcessSubmittedJobOnFarm: ProcessSubmittedJobOnFarmModel = SettingsField(
         default_factory=ProcessSubmittedJobOnFarmModel,
         title="Publish Job Settings")
+    SubmitVersionDiff: SubmitVersionDiffModel = SettingsField(
+        default_factory=SubmitVersionDiffModel,
+        title="Version Diff Job Settings")
 
     # Host-specific
     FusionSubmitDeadline: FusionSubmitDeadlineModel = SettingsField(
@@ -518,6 +599,33 @@ DEFAULT_DEADLINE_PLUGINS_SETTINGS = {
                 ],
             }
         ]
+    },
+    "SubmitVersionDiff": {
+        "enabled": False,
+        "profiles": [
+            {
+                "host_names": ["nuke"],
+                "product_base_types": ["render"],
+                "task_types": [],
+                "families": []
+            },
+            {
+                "host_names": ["houdini"],
+                "product_base_types": ["render"],
+                "task_types": [],
+                "families": ["redshift_rop"]
+            }
+        ],
+        "diff_suffix": "_diff",
+        "threshold": 6,
+        "blur_size": 9,
+        "min_changed_percent": 0.05,
+        "max_output_width": 3840,
+        "chunk_size": 10,
+        "priority": 40,
+        "group": "",
+        "pool": "",
+        "department": ""
     },
     "ProcessSubmittedJobOnFarm": {
         "deadline_priority": 50,

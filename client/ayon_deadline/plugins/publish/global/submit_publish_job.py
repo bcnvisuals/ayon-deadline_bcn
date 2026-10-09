@@ -305,6 +305,11 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
         instance_skeleton_data = create_skeleton_instance(
             instance, families_transfer=self.families_transfer,
             instance_transfer=self.instance_transfer)
+        # BCN: source families (e.g. 'redshift_rop') for farm-side plugins
+        #   like SubmitVersionDiff
+        instance_skeleton_data["sourceFamilies"] = list(
+            instance.data.get("families") or []
+        )
         """
         if content of `expectedFiles` list are dictionaries, we will handle
         it as list of AOVs, creating instance for every one of them.

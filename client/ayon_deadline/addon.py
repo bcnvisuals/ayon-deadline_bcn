@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Tuple
 import requests
 import ayon_api
 
-from ayon_core.addon import AYONAddon, IPluginPaths
+from ayon_core.addon import AYONAddon, IPluginPaths, click_wrap
 from ayon_core.lib import CacheItem
 
 from .version import __version__
@@ -144,6 +144,9 @@ class DeadlineAddon(AYONAddon, IPluginPaths):
         if host_name:
             paths.append(os.path.join(publish_dir, host_name))
         return paths
+
+    def cli(self, click_group):
+        click_group.add_command(cli_main.to_click_obj())
 
     def get_server_info_by_name(
         self,
@@ -352,3 +355,32 @@ class DeadlineAddon(AYONAddon, IPluginPaths):
         default_password = server_info["default_password"]
         if default_username and default_password:
             return default_username, default_password
+
+
+@click_wrap.group(DeadlineAddon.name, help="Deadline addon commands")
+def cli_main():
+    pass
+
+
+@cli_main.command(
+    "version-diff-render",
+    help="Render version diff frames of a spec (Deadline task)."
+)
+@click_wrap.argument("spec_path")
+@click_wrap.option("--start", type=int, required=True)
+@click_wrap.option("--end", type=int, required=True)
+def version_diff_render(spec_path, start, end):
+    from .version_diff import render_frames
+
+    render_frames(spec_path, start, end)
+
+
+@cli_main.command(
+    "version-diff-finalize",
+    help="Make version diff review and farm publish metadata."
+)
+@click_wrap.argument("spec_path")
+def version_diff_finalize(spec_path):
+    from .version_diff import finalize
+
+    finalize(spec_path)
