@@ -59,8 +59,8 @@ class SubmitVersionDiff(pyblish.api.InstancePlugin,
     threshold = 6
     blur_size = 9
     min_changed_percent = 0.05
-    max_output_width = 3840
-    chunk_size = 10
+    max_output_width = 2048
+    chunk_size = 20
     priority = 40
     group = ""
     pool = ""

@@ -442,11 +442,16 @@ class SubmitVersionDiffModel(BaseSettingsModel):
         title="Frame changed above (% of pixels)"
     )
     max_output_width: int = SettingsField(
-        3840,
+        2048,
         ge=0,
-        title="Max diff image width (0 = source)"
+        title="Working/output width (0 = source)",
+        description=(
+            "Frames are box-downscaled to this width before comparing and"
+            " the diff is written at this size. Full 6K comparisons were"
+            " ~6x slower on the farm."
+        )
     )
-    chunk_size: int = SettingsField(10, ge=1, title="Frames per Task")
+    chunk_size: int = SettingsField(20, ge=1, title="Frames per Task")
     priority: int = SettingsField(40, title="Priority")
     group: str = SettingsField("", title="Group")
     pool: str = SettingsField("", title="Pool")
@@ -620,8 +625,8 @@ DEFAULT_DEADLINE_PLUGINS_SETTINGS = {
         "threshold": 6,
         "blur_size": 9,
         "min_changed_percent": 0.05,
-        "max_output_width": 3840,
-        "chunk_size": 10,
+        "max_output_width": 2048,
+        "chunk_size": 20,
         "priority": 40,
         "group": "",
         "pool": "",

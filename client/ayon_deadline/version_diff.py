@@ -229,7 +229,21 @@ def get_frame_stats_path(spec, frame):
     )
 
 
-def _display_args(path, channel_indexes, colorspace, config_path, settings):
+def get_working_size(spec):
+    """Resolution the diff is computed and written at.
+
+    Frames are box-downscaled to 'max_output_width' right after reading;
+    comparing full 6K frames was ~6x more expensive on the farm and the
+    noise prefilter blurs fine detail away anyway.
+    """
+    width, height = spec["width"], spec["height"]
+    max_width = int(spec["settings"]["max_output_width"])
+    if not max_width or width <= max_width:
+        return width, height
+    return max_width, int(round(height * max_width / width / 2.0) * 2)
+
+
+def _display_args(path, channel_indexes, colorspace, config_path, size):
     """oiiotool args reading one frame and converting it to display."""
     args = [
         "-i", path,
@@ -237,6 +251,8 @@ def _display_args(path, channel_indexes, colorspace, config_path, settings):
         "--ch", ",".join(str(idx) for idx in channel_indexes),
         "--fixnan", "black",
     ]
+    if size:
+        args.extend(["--resize:filter=box", "{}x{}".format(*size)])
     if config_path and colorspace:
         # Empty display & view -> OCIO config defaults
         args.extend([f"--ociodisplay:from={colorspace}", "", ""])
@@ -246,12 +262,20 @@ def _display_args(path, channel_indexes, colorspace, config_path, settings):
     return args
 
 
-def _prefilter_args(settings):
-    blur = int(settings["blur_size"])
+def _prefilter_args(blur):
     args = ["--median", "3x3"]
     if blur > 1:
         args.extend(["--blur", f"{blur}x{blur}"])
     return args
+
+
+def _get_blur_size(spec, working_width):
+    """Noise blur scaled to the working resolution (odd, at least 3)."""
+    blur = int(spec["settings"]["blur_size"])
+    if blur <= 1:
+        return blur
+    scaled = int(round(blur * working_width / spec["width"]))
+    return max(3, scaled | 1)
 
 
 def build_frame_args(spec, frame):
@@ -264,20 +288,26 @@ def build_frame_args(spec, frame):
     label = "{}  v{:03d} vs v{:03d}  |  frame {}".format(
         spec["product_name"], spec["new_version"], spec["old_version"], frame
     )
+    width, height = get_working_size(spec)
+    resize = None
+    if width != spec["width"]:
+        resize = (width, height)
+    blur = _get_blur_size(spec, width)
+
     args = get_oiio_tool_args("oiiotool")
     if config_path:
         args.extend(["--colorconfig", config_path])
     args.extend(_display_args(
         new_path, spec["new_channels"], spec.get("new_colorspace"),
-        config_path, settings
+        config_path, resize
     ))
     args.extend(["--label", "dispNew", "--dup"])
-    args.extend(_prefilter_args(settings))
+    args.extend(_prefilter_args(blur))
     args.extend(_display_args(
         old_path, spec["old_channels"], spec.get("old_colorspace"),
-        config_path, settings
+        config_path, resize
     ))
-    args.extend(_prefilter_args(settings))
+    args.extend(_prefilter_args(blur))
     args.extend([
         # Per pixel difference = max channel difference in display space
         "--absdiff", "--maxchan",
@@ -304,13 +334,6 @@ def build_frame_args(spec, frame):
         "mask", "--mulc", ",".join(str(v) for v in HIGHLIGHT_COLOR),
         "--add",
     ])
-
-    width = spec["width"]
-    max_width = int(settings["max_output_width"])
-    if max_width and width > max_width:
-        height = int(round(spec["height"] * max_width / width / 2.0) * 2)
-        args.extend(["--resize", f"{max_width}x{height}"])
-        width = max_width
 
     font_size = max(16, int(width / 60))
     args.extend([
@@ -516,8 +539,8 @@ def finalize(spec_path):
         "frameStartHandle": frame_start,
         "frameEndHandle": frame_end,
         "fps": spec["fps"],
-        "resolutionWidth": spec["width"],
-        "resolutionHeight": spec["height"],
+        "resolutionWidth": get_working_size(spec)[0],
+        "resolutionHeight": get_working_size(spec)[1],
         "pixelAspect": 1,
         "comment": summary,
         "source": spec["source"],
